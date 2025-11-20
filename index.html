@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    <title>Control de Almacén - Scanner de Códigos</title>
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .section {
+            padding: 20px;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding: 12px;
+            background: #f7fafc;
+            border-radius: 8px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-connected {
+            background: #48bb78;
+            box-shadow: 0 0 10px rgba(72, 187, 120, 0.5);
+        }
+
+        .status-disconnected {
+            background: #f56565;
+            animation: none;
+        }
+
+        .status-testing {
+            background: #ed8936;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 12px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #38a169;
+        }
+
+        .btn-purple {
+            background: #9f7aea;
+            color: white;
+            font-size: 14px;
+            padding: 10px;
+        }
+
+        .btn-test {
+            background: #ed8936;
+            color: white;
+            font-size: 14px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .alert-entrada {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 2px solid #48bb78;
+        }
+
+        .alert-salida {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 2px solid #f56565;
+        }
+
+        .alert-info {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
+        .alert-error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 2px solid #f56565;
+        }
+
+        .alert-warning {
+            background: #feebc8;
+            color: #7c2d12;
+            border: 2px solid #ed8936;
+        }
+
+        .alert-icon {
+            font-size: 24px;
+        }
+
+        .scanner-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        #scanner {
+            width: 100%;
+            height: 100%;
+        }
+
+        #scanner canvas,
+        #scanner video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scanner-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border: 4px solid #667eea;
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .scanner-target {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 100px;
+            border: 3px solid #f56565;
+            border-radius: 10px;
+        }
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: #f7fafc;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .history-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .history-icon {
+            font-size: 20px;
+        }
+
+        .history-details h4 {
+            font-size: 14px;
+            color: #2d3748;
+            margin-bottom: 3px;
+        }
+
+        .history-details p {
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .badge-entrada {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .badge-salida {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: #a0aec0;
+        }
+
+        .scanned-code {
+            background: #c6f6d5;
+            border: 2px solid #48bb78;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .scanned-code p {
+            font-size: 12px;
+            color: #22543d;
+            margin-bottom: 5px;
+        }
+
+        .scanned-code h3 {
+            font-size: 20px;
+            color: #22543d;
+        }
+
+        h2 {
+            font-size: 18px;
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+
+        .debug-info {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .debug-info p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <h1>📦 Control de Almacén</h1>
+                <p>Escáner de Códigos de Barras</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section">
+                <div class="connection-status">
+                    <span style="font-weight: 600; color: #4a5568;">ESP32</span>
+                    <div class="status-indicator">
+                        <div class="status-dot" id="statusDot"></div>
+                        <span id="statusText">Desconectado</span>
+                    </div>
+                </div>
+                
+                <input type="text" id="esp32IP" placeholder="IP del ESP32 (ej: 192.168.1.100)" value="192.168.1.100">
+                
+                <button class="btn-primary" id="connectBtn" onclick="toggleConnection()">
+                    Conectar al ESP32
+                </button>
+
+                <button class="btn-test" onclick="testConnection()" id="testConnectionBtn">
+                    🔍 Probar Conexión
+                </button>
+            </div>
+        </div>
+
+        <div id="directionAlert" style="display: none;"></div>
+
+        <div class="card">
+            <div class="section">
+                <div id="scannerSection" style="display: none;">
+                    <div class="scanner-container">
+                        <div id="scanner"></div>
+                        <div class="scanner-overlay">
+                            <div class="scanner-target"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="scannedCodeDisplay" style="display: none;"></div>
+                    
+                    <button class="btn-danger" onclick="stopScanning()">
+                        Cancelar Escaneo
+                    </button>
+                </div>
+
+                <button class="btn-success" id="scanBtn" onclick="startScanning()" disabled>
+                    📊 Escanear Código de Barras
+                </button>
+            </div>
+        </div>
+
+        <div id="messageAlert" style="display: none;"></div>
+
+        <div class="card">
+            <div class="section">
+                <h2>📋 Historial Reciente</h2>
+                <div id="historyList">
+                    <div class="empty-state">
+                        <p>No hay movimientos registrados</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section">
+                <button class="btn-purple" onclick="simulateESP32Signal()" id="testBtn" disabled>
+                    🧪 Simular Señal ESP32 (Demo)
+                </button>
+                
+                <div id="debugInfo" class="debug-info" style="display: none;">
+                    <strong>Log de Depuración:</strong>
+                    <div id="debugLog"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var connected = false;
+        var direction = null;
+        var history = [];
+        var scanning = false;
+        var debugMode = true;
+
+        function addDebugLog(message) {
+            if (!debugMode) return;
+            
+            var debugInfo = document.getElementById('debugInfo');
+            var debugLog = document.getElementById('debugLog');
+            
+            debugInfo.style.display = 'block';
+            
+            var timestamp = new Date().toLocaleTimeString();
+            var p = document.createElement('p');
+            p.textContent = '[' + timestamp + '] ' + message;
+            debugLog.appendChild(p);
+            
+            debugLog.scrollTop = debugLog.scrollHeight;
+            
+            if (debugLog.children.length > 20) {
+                debugLog.removeChild(debugLog.children[0]);
+            }
+        }
+
+        function testConnection() {
+            var esp32IP = document.getElementById('esp32IP').value;
+            
+            if (!esp32IP) {
+                showMessage('Por favor ingresa la IP del ESP32', 'error');
+                return;
+            }
+
+            addDebugLog('Probando conexión a: ' + esp32IP);
+            showMessage('Probando conexión con ESP32...', 'warning');
+            
+            var statusDot = document.getElementById('statusDot');
+            statusDot.className = 'status-dot status-testing';
+            
+            fetch('http://' + esp32IP + '/estado', {
+                method: 'GET',
+                mode: 'cors',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(function(response) {
+                addDebugLog('Respuesta recibida - Status: ' + response.status);
+                return response.json();
+            })
+            .then(function(data) {
+                addDebugLog('Datos recibidos: ' + JSON.stringify(data));
+                showMessage('✓ Conexión exitosa con ESP32!', 'info');
+                console.log('ESP32 Estado:', data);
+            })
+            .catch(function(error) {
+                addDebugLog('ERROR: ' + error.message);
+                showMessage('Error de conexión: ' + error.message + '. Verifica que estés en la misma red WiFi.', 'error');
+                console.error('Error:', error);
+            });
+        }
+
+        function toggleConnection() {
+            if (!connected) {
+                connectToESP32();
+            } else {
+                disconnectFromESP32();
+            }
+        }
+
+        function connectToESP32() {
+            var esp32IP = document.getElementById('esp32IP').value;
+            
+            if (!esp32IP) {
+                showMessage('Por favor ingresa la IP del ESP32', 'error');
+                return;
+            }
+
+            addDebugLog('Intentando conectar a: ' + esp32IP);
+            showMessage('Conectando al ESP32...', 'info');
+
+            fetch('http://' + esp32IP + '/estado', {
+                method: 'GET',
+                mode: 'cors'
+            })
+            .then(function(response) {
+                if (response.ok) {
+                    return response.json();
+                }
+                throw new Error('ESP32 no responde');
+            })
+            .then(function(data) {
+                connected = true;
+                updateConnectionUI();
+                addDebugLog('Conexión establecida correctamente');
+                showMessage('Conectado al ESP32 exitosamente', 'info');
+                
+                setTimeout(function() {
+                    simulateESP32Signal();
+                }, 2000);
+            })
+            .catch(function(error) {
+                addDebugLog('Error de conexión: ' + error.message);
+                showMessage('No se pudo conectar al ESP32. Verifica la IP y que estés en la misma red WiFi.', 'error');
+                console.error('Error:', error);
+            });
+        }
+
+        function disconnectFromESP32() {
+            connected = false;
+            direction = null;
+            updateConnectionUI();
+            hideDirectionAlert();
+            addDebugLog('Desconectado del ESP32');
+            showMessage('Desconectado del ESP32', 'info');
+        }
+
+        function updateConnectionUI() {
+            var statusDot = document.getElementById('statusDot');
+            var statusText = document.getElementById('statusText');
+            var connectBtn = document.getElementById('connectBtn');
+            var esp32IP = document.getElementById('esp32IP');
+            var scanBtn = document.getElementById('scanBtn');
+            var testBtn = document.getElementById('testBtn');
+
+            if (connected) {
+                statusDot.className = 'status-dot status-connected';
+                statusText.textContent = 'Conectado';
+                statusText.style.color = '#22543d';
+                connectBtn.textContent = 'Desconectar';
+                connectBtn.className = 'btn-danger';
+                esp32IP.disabled = true;
+                testBtn.disabled = false;
+            } else {
+                statusDot.className = 'status-dot status-disconnected';
+                statusText.textContent = 'Desconectado';
+                statusText.style.color = '#742a2a';
+                connectBtn.textContent = 'Conectar al ESP32';
+                connectBtn.className = 'btn-primary';
+                esp32IP.disabled = false;
+                scanBtn.disabled = true;
+                testBtn.disabled = true;
+            }
+        }
+
+        function simulateESP32Signal() {
+            var randomDirection = Math.random() > 0.5 ? 'entrada' : 'salida';
+            direction = randomDirection;
+            showDirectionAlert(randomDirection);
+            addDebugLog('Señal simulada: ' + randomDirection);
+            showMessage('Movimiento detectado: ' + randomDirection.toUpperCase(), 'info');
+            document.getElementById('scanBtn').disabled = false;
+        }
+
+        function showDirectionAlert(dir) {
+            var alertDiv = document.getElementById('directionAlert');
+            var icon = dir === 'entrada' ? '📈' : '📉';
+            var className = dir === 'entrada' ? 'alert-entrada' : 'alert-salida';
+            var text = dir === 'entrada' ? 'ENTRADA DETECTADA' : 'SALIDA DETECTADA';
+            
+            alertDiv.className = 'card alert ' + className;
+            alertDiv.innerHTML = '<div style="text-align: center; width: 100%;"><div style="font-size: 32px; margin-bottom: 10px;">' + icon + '</div><div style="font-size: 20px; font-weight: bold; margin-bottom: 5px;">' + text + '</div><p style="margin: 0; font-size: 14px;">Escanea el código de barras del producto</p></div>';
+            alertDiv.style.display = 'block';
+        }
+
+        function hideDirectionAlert() {
+            document.getElementById('directionAlert').style.display = 'none';
+        }
+
+        function showMessage(message, type) {
+            var alertDiv = document.getElementById('messageAlert');
+            var icon = type === 'error' ? '⚠️' : (type === 'warning' ? '⚡' : 'ℹ️');
+            var className = type === 'error' ? 'alert-error' : (type === 'warning' ? 'alert-warning' : 'alert-info');
+            
+            alertDiv.className = 'card alert ' + className;
+            alertDiv.innerHTML = '<span class="alert-icon">' + icon + '</span><p style="margin: 0; flex: 1;">' + message + '</p>';
+            alertDiv.style.display = 'block';
+
+            setTimeout(function() {
+                alertDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function startScanning() {
+            if (!connected || !direction) {
+                showMessage('Error: Debes estar conectado y tener una dirección detectada', 'error');
+                return;
+            }
+
+            scanning = true;
+            document.getElementById('scanBtn').style.display = 'none';
+            document.getElementById('scannerSection').style.display = 'block';
+            addDebugLog('Iniciando escáner...');
+            showMessage('Iniciando escáner de código de barras...', 'info');
+
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#scanner'),
+                    constraints: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "environment"
+                    }
+                },
+                decoder: {
+                    readers: [
+                        "ean_reader",
+                        "ean_8_reader",
+                        "code_128_reader",
+                        "code_39_reader",
+                        "upc_reader",
+                        "upc_e_reader"
+                    ]
+                },
+                locate: true
+            }, function(err) {
+                if (err) {
+                    console.error(err);
+                    addDebugLog('Error cámara: ' + err.message);
+                    showMessage('Error al iniciar cámara: ' + err.message, 'error');
+                    stopScanning();
+                    return;
+                }
+                Quagga.start();
+                addDebugLog('Escáner activo');
+                showMessage('Apunta la cámara al código de barras', 'info');
+            });
+
+            Quagga.onDetected(handleBarcodeDetected);
+        }
+
+        function stopScanning() {
+            if (scanning) {
+                Quagga.stop();
+                scanning = false;
+            }
+            document.getElementById('scanBtn').style.display = 'block';
+            document.getElementById('scannerSection').style.display = 'none';
+            document.getElementById('scannedCodeDisplay').style.display = 'none';
+            addDebugLog('Escáner detenido');
+            showMessage('Escáner detenido', 'info');
+        }
+
+        function handleBarcodeDetected(result) {
+            var code = result.codeResult.code;
+            
+            if (code && code.length > 0) {
+                addDebugLog('Código detectado: ' + code);
+                displayScannedCode(code);
+                
+                setTimeout(function() {
+                    stopScanning();
+                    
+                    if (connected && direction) {
+                        sendToESP32(code, direction);
+                        registerMovement(code, direction);
+                        showMessage('Producto ' + code + ' registrado como ' + direction, 'info');
+                        
+                        setTimeout(function() {
+                            direction = null;
+                            hideDirectionAlert();
+                            document.getElementById('scanBtn').disabled = true;
+                        }, 3000);
+                    } else {
+                        showMessage('Error: No hay conexión o dirección no detectada', 'error');
+                    }
+                }, 1000);
+            }
+        }
+
+        function displayScannedCode(code) {
+            var display = document.getElementById('scannedCodeDisplay');
+            display.className = 'scanned-code';
+            display.innerHTML = '<p>Código Detectado:</p><h3>' + code + '</h3>';
+            display.style.display = 'block';
+        }
+
+        function sendToESP32(barcode, dir) {
+            var esp32IP = document.getElementById('esp32IP').value;
+            var data = {
+                barcode_id: barcode,
+                tipo: dir,
+                timestamp: new Date().toISOString(),
+                modulo_id: 'puerta_principal'
+            };
+            
+            addDebugLog('Enviando a ESP32: ' + barcode + ' - ' + dir);
+            console.log('Enviando al ESP32:', data);
+            
+            fetch('http://' + esp32IP + '/registrar', {
+                method: 'POST',
+                mode: 'cors',
+                headers: { 
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(function(response) {
+                addDebugLog('Respuesta ESP32: ' + response.status);
+                return response.json();
+            })
+            .then(function(data) {
+                console.log('Respuesta ESP32:', data);
+                addDebugLog('Datos enviados correctamente');
+                showMessage('Datos enviados correctamente al ESP32', 'info');
+            })
+            .catch(function(error) {
+                console.error('Error al enviar:', error);
+                addDebugLog('ERROR envío: ' + error.message);
+                showMessage('Error al comunicar con ESP32: ' + error.message, 'error');
+            });
+        }
+
+        function registerMovement(barcode, dir) {
+            var newEntry = {
+                id: Date.now(),
+                code: barcode,
+                tipo: dir,
+                fecha: new Date().toLocaleString('es-CO', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })
+            };
+            
+            history.unshift(newEntry);
+            if (history.length > 10) {
+                history.pop();
+            }
+            
+            updateHistoryDisplay();
+        }
+
+        function updateHistoryDisplay() {
+            var historyDiv = document.getElementById('historyList');
+            
+            if (history.length === 0) {
+                historyDiv.innerHTML = '<div class="empty-state"><p>No hay movimientos registrados</p></div>';
+                return;
+            }
+
+            var html = '';
+            for (var i = 0; i < history.length; i++) {
+                var item = history[i];
+                var icon = item.tipo === 'entrada' ? '📈' : '📉';
+                html += '<div class="history-item"><div class="history-info"><span class="history-icon">' + icon + '</span><div class="history-details"><h4>' + item.code + '</h4><p>' + item.fecha + '</p></div></div><span class="badge badge-' + item.tipo + '">' + item.tipo + '</span></div>';
+            }
+            
+            historyDiv.innerHTML = html;
+        }
+
+        updateConnectionUI();
+    </script>
+</body>
+</html>
